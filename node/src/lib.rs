@@ -254,6 +254,8 @@ pub struct Conf<'a> {
 
     /// Load `wallet` after initialization.
     pub wallet: Option<String>,
+
+    pub bind: Option<SocketAddrV4>
 }
 
 impl Default for Conf<'_> {
@@ -268,6 +270,7 @@ impl Default for Conf<'_> {
             attempts: 5,
             enable_zmq: false,
             wallet: Some("default".to_string()),
+            bind: None,
         }
     }
 }
@@ -302,8 +305,17 @@ impl Node {
             let work_dir = Self::init_work_dir(conf)?;
             let cookie_file = work_dir.path().join(conf.network).join(".cookie");
 
-            let rpc_port = get_available_port()?;
-            let rpc_socket = SocketAddrV4::new(LOCAL_IP, rpc_port);
+
+            let rpc_socket = match conf.bind { 
+                Some(bind) => {
+                    bind
+                }
+                None => { 
+                    let rpc_port = get_available_port()?;
+                    let rpc_socket = SocketAddrV4::new(LOCAL_IP, rpc_port);
+                    rpc_socket
+                }
+            };
             let rpc_url = format!("http://{}", rpc_socket);
 
             let (p2p_args, p2p_socket) = Self::p2p_args(&conf.p2p)?;
@@ -313,7 +325,7 @@ impl Node {
             let stdout = if conf.view_stdout { Stdio::inherit() } else { Stdio::null() };
 
             let datadir_arg = format!("-datadir={}", work_dir.path().display());
-            let rpc_arg = format!("-rpcport={}", rpc_port);
+            let rpc_arg = format!("-rpcport={}", rpc_socket.port());
             let default_args = [&datadir_arg, &rpc_arg];
             let conf_args = validate_args(conf.args.clone())?;
 
